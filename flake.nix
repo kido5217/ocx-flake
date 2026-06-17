@@ -18,54 +18,32 @@
         pkgs = import nixpkgs { inherit system; };
         version = "2.0.11";
 
-        binaries = {
-          "x86_64-linux" = {
-            url = "https://github.com/kdcokenny/ocx/releases/download/v${version}/ocx-linux-x64-musl";
-            hash = "sha256-2EuwZ72HW8NoT364BnEoIes+/TtvN3UQQN6spzZWRFY=";
-          };
-          "aarch64-linux" = {
-            url = "https://github.com/kdcokenny/ocx/releases/download/v${version}/ocx-linux-arm64-musl";
-            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-          };
-          "x86_64-darwin" = {
-            url = "https://github.com/kdcokenny/ocx/releases/download/v${version}/ocx-darwin-x64";
-            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-          };
-          "aarch64-darwin" = {
-            url = "https://github.com/kdcokenny/ocx/releases/download/v${version}/ocx-darwin-arm64";
-            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-          };
+        npm-tarball = pkgs.fetchurl {
+          url = "https://registry.npmjs.org/ocx/-/ocx-${version}.tgz";
+          hash = "sha256-Pw9ka7wX7WMaSzKRrXClbiHwebxZRiy0Z2wmLF+Jfj8=";
         };
-
-        bin = binaries.${system};
       in
       {
-        packages.default = pkgs.stdenv.mkDerivation {
-          pname = "ocx";
-          inherit version;
-
-          src = pkgs.fetchurl {
-            inherit (bin) url hash;
-          };
-
-          dontUnpack = true;
-
-          nativeBuildInputs = [ pkgs.patchelf ];
-
-          installPhase = ''
+        packages.default = pkgs.runCommand "ocx-${version}"
+          {
+            nativeBuildInputs = [ pkgs.makeWrapper ];
+            buildInputs = [ pkgs.bun ];
+            meta = with pkgs.lib; {
+              description = "ShadCN-style CLI for OpenCode extensions";
+              homepage = "https://github.com/kdcokenny/ocx";
+              license = licenses.mit;
+              maintainers = [ ];
+            };
+          }
+          ''
+            tar -xzf "${npm-tarball}"
             mkdir -p "$out/bin"
-            cp "$src" "$out/bin/ocx"
+            cp package/dist/index.js "$out/bin/ocx"
             chmod +x "$out/bin/ocx"
-            patchelf --add-rpath "${pkgs.musl}/lib:${pkgs.stdenv.cc.cc.lib}/lib" "$out/bin/ocx"
+            wrapProgram "$out/bin/ocx" \
+              --set PATH "${pkgs.bun}/bin" \
+              --prefix PATH : "${pkgs.bun}/bin"
           '';
-
-          meta = with pkgs.lib; {
-            description = "ShadCN-style CLI for OpenCode extensions";
-            homepage = "https://github.com/kdcokenny/ocx";
-            license = licenses.mit;
-            maintainers = [ ];
-          };
-        };
 
         devShells.default = pkgs.mkShell {
           packages = [
