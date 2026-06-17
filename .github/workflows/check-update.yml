@@ -1,0 +1,47 @@
+name: Check for ocx update
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v27
+
+      - name: Get current and latest versions
+        id: versions
+        run: |
+          CURRENT=$(grep '^        version = ' flake.nix | sed 's/.*"\(.*\)";/\1/')
+          LATEST=$(curl -s "https://registry.npmjs.org/ocx/latest" | jq -r '.version')
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+
+      - name: Update flake.nix
+        if: steps.versions.outputs.latest != steps.versions.outputs.current
+        run: |
+          VERSION="${{ steps.versions.outputs.latest }}"
+          HASH_B32="$(nix-prefetch-url "https://registry.npmjs.org/ocx/-/ocx-${VERSION}.tgz")"
+          HASH_SRI="$(nix hash convert --from base32 --to sri "sha256:${HASH_B32}")"
+          sed -i "s/version = \".*\";/version = \"${VERSION}\";/" flake.nix
+          sed -i "s|hash = \".*\";|hash = \"${HASH_SRI}\";|" flake.nix
+
+      - name: Verify build
+        if: steps.versions.outputs.latest != steps.versions.outputs.current
+        run: nix build .#
+
+      - name: Create Pull Request
+        if: steps.versions.outputs.latest != steps.versions.outputs.current
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: update ocx to ${{ steps.versions.outputs.latest }}"
+          title: "Update ocx to ${{ steps.versions.outputs.latest }}"
+          body: |
+            Automated update of ocx from ${{ steps.versions.outputs.current }} to ${{ steps.versions.outputs.latest }}.
+          branch: auto-update-ocx
+          delete-branch: true
