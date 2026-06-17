@@ -1,0 +1,9 @@
+.code-scalpel/
+
+# Nix
+result
+*.drv
+*.log
+
+# direnv
+.direnv/
