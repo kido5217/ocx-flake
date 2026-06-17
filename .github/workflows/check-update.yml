@@ -36,12 +36,18 @@ jobs:
 
       - name: Create Pull Request
         if: steps.versions.outputs.latest != steps.versions.outputs.current
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          commit-message: "chore: update ocx to ${{ steps.versions.outputs.latest }}"
-          title: "Update ocx to ${{ steps.versions.outputs.latest }}"
-          body: |
-            Automated update of ocx from ${{ steps.versions.outputs.current }} to ${{ steps.versions.outputs.latest }}.
-          branch: auto-update-ocx
-          delete-branch: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="auto-update-ocx-${{ steps.versions.outputs.latest }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add flake.nix
+          git commit -m "chore: update ocx to ${{ steps.versions.outputs.latest }}"
+          git push origin "$BRANCH" --force
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Update ocx to ${{ steps.versions.outputs.latest }}" \
+            --body "Automated update of ocx from ${{ steps.versions.outputs.current }} to ${{ steps.versions.outputs.latest }}."
